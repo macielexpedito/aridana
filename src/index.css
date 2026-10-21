@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/* cores e fontes da marca (tiradas do Figma) */
+@theme {
+  --color-creme: #F6F0E8;
+  --color-taupe: #C2B8AC;
+  --color-areia: #D1BDA1;
+  --color-marrom: #3A302A;
+  --color-carvao: #2E2724;
+  --color-caramelo: #8D5832;
+  --color-dourado: #A68A62;
+  --color-pedra: #7A726C;
+
+  --font-titulo: "Playfair Display", serif;
+  --font-texto: Inter, sans-serif;
+  --font-detalhe: Montserrat, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-creme font-detalhe text-carvao antialiased;
+  }
+  button {
+    @apply cursor-pointer;
+  }
+}
+
+/* classes com nome em português usadas nos componentes */
+@layer components {
+  .cabecalho {
+    @apply bg-taupe sticky top-0 z-20;
+  }
+  .menu-link {
+    @apply font-texto text-[13px] uppercase tracking-wide text-[#14120f] pb-1 border-b-2 border-transparent transition-colors hover:border-carvao;
+  }
+  .menu-link-ativo {
+    @apply border-carvao;
+  }
+  .barra-busca {
+    @apply flex items-center gap-2 w-full bg-white/80 border border-stone-200 rounded-full h-[38px] px-4 text-xs;
+  }
+  .barra-busca input {
+    @apply bg-transparent flex-1 outline-none font-light text-stone-700 placeholder:text-stone-400 min-w-0;
+  }
+
+  .titulo-pagina {
+    @apply font-texto text-3xl sm:text-4xl uppercase text-carvao tracking-wide;
+  }
+  .subtitulo-pagina {
+    @apply font-texto text-sm text-carvao;
+  }
+  .titulo-secao {
+    @apply font-texto text-[22px] uppercase text-marrom text-center;
+  }
+
+  .botao-principal {
+    @apply bg-carvao text-white font-detalhe font-semibold text-xs uppercase tracking-[0.2em] px-6 py-4 transition-colors hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .botao-contorno {
+    @apply border border-stone-300 bg-white text-carvao font-detalhe font-medium text-xs uppercase tracking-wider px-5 py-3 transition-colors hover:border-carvao;
+  }
+  .botao-areia {
+    @apply bg-[#c5b49e] text-carvao font-detalhe font-semibold text-[10px] uppercase tracking-widest px-5 py-[10px] hover:bg-[#b8a68f] transition-colors;
+  }
+
+  .filtro-pilula {
+    @apply border border-stone-300 bg-transparent px-4 py-[9px] font-detalhe text-[10px] uppercase tracking-[0.2em] text-carvao transition-colors hover:border-carvao;
+  }
+  .filtro-pilula-ativo {
+    @apply bg-carvao text-white border-carvao;
+  }
+
+  .cartao-produto {
+    @apply flex flex-col;
+  }
+  .cartao-produto-imagem {
+    @apply relative bg-[#e8e2d8] overflow-hidden aspect-[4/5];
+  }
+  .etiqueta {
+    @apply absolute top-2 left-2 px-2 py-[3px] text-[8px] uppercase tracking-[0.2em] text-white font-detalhe font-medium;
+  }
+  .etiqueta-novo {
+    @apply bg-caramelo;
+  }
+  .etiqueta-destaque {
+    @apply bg-carvao;
+  }
+
+  .campo {
+    @apply w-full bg-white border border-stone-300 px-3 py-2 text-xs font-detalhe outline-none focus:border-carvao;
+  }
+  .campo-rotulo {
+    @apply block text-[11px] uppercase tracking-wider text-carvao mb-1 font-medium;
+  }
+
+  .caixa-branca {
+    @apply bg-white border border-stone-200;
+  }
+  .rodape-loja {
+    @apply bg-marrom text-[#fffaf0] mt-20;
+  }
+}

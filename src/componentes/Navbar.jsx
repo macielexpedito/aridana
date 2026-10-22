@@ -6,7 +6,7 @@ import { Lupa, Usuario, Coracao, Sacola } from './Icones.jsx'
 function Logo() {
   return (
     <Link to="/" className="flex items-center gap-2" id="logo">
-      <img src="/img/logo.png" alt="Logo Aridana" className="h-12 sm:h-16 lg:h-20 w-auto object-contain" />
+      <img src="/img/logotipo.png" alt="Logo Aridana" className="h-12 sm:h-16 lg:h-20 w-auto object-contain" />
     </Link>
   )
 }

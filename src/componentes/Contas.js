@@ -1,9 +1,14 @@
 
 const CHAVE_SESSAO = 'aridana_sessao'
 
+function usuarioValido(u) {
+  return !!u && typeof u.nome === 'string' && u.nome !== '' && typeof u.email === 'string' && (u.tipo === 'cliente' || u.tipo === 'admin')
+}
+
 export function lerSessao() {
   try {
-    return JSON.parse(localStorage.getItem(CHAVE_SESSAO))
+    const salvo = JSON.parse(localStorage.getItem(CHAVE_SESSAO))
+    return usuarioValido(salvo) ? salvo : null
   } catch (e) {
     return null
   }
@@ -29,22 +34,30 @@ export async function chamarApi(rota, corpo, metodo) {
   } catch (e) {
     throw new Error('sem_servidor')
   }
-  const dados = await resp.json().catch(() => ({}))
-  if (!resp.ok) throw new Error(dados.erro || 'erro_servidor')
-  return dados
+    const dados = await resp.json().catch(() => null)
+    if (!resp.ok) throw new Error((dados && dados.erro) || 'erro_servidor')
+    if (dados === null) throw new Error('sem_servidor')
+    return dados
+}
+
+async function comoUsuario(promessa) {
+  const usuario = await promessa
+  if (!usuarioValido(usuario)) throw new Error('sem_servidor')
+  return usuario
 }
 
 export function cadastrar(nome, email, senha) {
-  return chamarApi('cadastro', { nome, email, senha })
+  return comoUsuario(chamarApi('cadastro', { nome, email, senha }))
 }
 
 export function autenticar(email, senha) {
-  return chamarApi('login', { email, senha })
+  return comoUsuario(chamarApi('login', { email, senha }))
 }
 
 export async function verificarSessao() {
   try {
-    return await chamarApi('me')
+    const usuario = await chamarApi('me')
+    return usuarioValido(usuario) ? usuario : null
   } catch (e) {
     return null
   }

@@ -9,6 +9,7 @@ import Clientes from './admin/Clientes.jsx'
 import Configuracoes from './admin/Configuracoes.jsx'
 import ImportarCsv from './admin/ImportarCsv.jsx'
 import { listarClientes, listarProdutosAdmin, editarProduto, removerProduto, criarProduto, enviarImagem } from '../componentes/Contas.js'
+import { exportarExcel } from './admin/exportarExcel.js'
 
 const ABAS = [
   { chave: 'todas', rotulo: 'Todas as Peças' },
@@ -28,6 +29,7 @@ function Admin({ onMensagem, onSair, onCatalogoAlterado }) {
   const [pagina, setPagina] = useState(1)
   const [editando, setEditando] = useState(null)
   const [importando, setImportando] = useState(false)
+    const [exportando, setExportando] = useState(false)
   const [enviandoImagem, setEnviandoImagem] = useState(false)
   const [clientes, setClientes] = useState(null)
   const [erroClientes, setErroClientes] = useState('')
@@ -35,6 +37,18 @@ function Admin({ onMensagem, onSair, onCatalogoAlterado }) {
   function tratarErro(err, texto) {
     if (err.message === 'nao_autenticado' || err.message === 'acesso_negado') onSair()
     else onMensagem(texto)
+  }
+
+    async function exportar() {
+    setExportando(true)
+    try {
+      await exportarExcel()
+      onMensagem('Planilha exportada')
+    } catch (err) {
+      tratarErro(err, 'Não foi possível exportar a planilha.')
+    } finally {
+      setExportando(false)
+    }
   }
 
   useEffect(() => {
@@ -173,7 +187,7 @@ function Admin({ onMensagem, onSair, onCatalogoAlterado }) {
           </button>
         ))}
         <p className="mt-auto text-[10px] text-pedra">● Operacional v2.4</p>
-      </aside>
+      </aside>  
 
       <main className="flex-1 min-w-0">
         <header className="flex items-center justify-between gap-4 bg-white border-b border-stone-200 px-6 py-3">
@@ -186,6 +200,9 @@ function Admin({ onMensagem, onSair, onCatalogoAlterado }) {
             <span className="hidden md:block text-xs text-pedra">{secao}</span>
           )}
           <div className="flex items-center gap-4">
+            <button type="button" onClick={exportar} disabled={exportando} className="botao-contorno !py-2" id="botao-exportar-excel">
+              {exportando ? 'Gerando...' : 'Exportar Excel'}
+            </button>
             <Link to="/" className="botao-contorno !py-2">Ver loja online ↗</Link>
             <button type="button" onClick={onSair} className="text-xs underline" id="botao-sair-admin">Sair</button>
             <div className="hidden sm:block text-right leading-tight">

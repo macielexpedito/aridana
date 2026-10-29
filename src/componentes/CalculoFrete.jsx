@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { buscarCep, calcularFrete, formatBRL, FRETE_GRATIS_A_PARTIR } from './Produtos.jsx'
+import { buscarCep, calcularFrete, prazoEntrega, formatBRL, FRETE_GRATIS_A_PARTIR } from './Produtos.jsx'
 
 function CalculoFrete({ subtotal, endereco, onEndereco, idCampo = 'campo-cep' }) {
   const [cep, setCep] = useState(endereco ? endereco.cep : '')
@@ -51,6 +51,9 @@ function CalculoFrete({ subtotal, endereco, onEndereco, idCampo = 'campo-cep' })
           </p>
           <p className="font-semibold text-carvao">
             Frete: {calcularFrete(endereco.uf, subtotal) === 0 ? 'Grátis' : formatBRL(calcularFrete(endereco.uf, subtotal))}
+          </p>
+          <p>
+            Prazo: {prazoEntrega(endereco.uf).min} a {prazoEntrega(endereco.uf).max} dias úteis
           </p>
         </div>
       )}

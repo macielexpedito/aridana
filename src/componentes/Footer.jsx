@@ -5,7 +5,7 @@ import { FRETE_GRATIS_A_PARTIR, formatBRL } from './Produtos.jsx'
 const ITENS = [
   { icone: <Caminhao />, titulo: 'Frete Grátis', desc: 'Em compras acima de ' + formatBRL(FRETE_GRATIS_A_PARTIR) },
   { icone: <Escudo />, titulo: 'Pagamento Seguro', desc: 'Checkout 100% protegido' },
-  { icone: <Fone />, titulo: 'Suporte 24/7', desc: 'Estamos aqui para ajudar' },
+  { icone: <Fone />, titulo: 'Suporte 24/7', desc: 'Estamos aqui para ajudar | (11) 99999-9999' },
   { icone: <Troca />, titulo: 'Troca Fácil', desc: '30 dias para devolução' },
 ]
 

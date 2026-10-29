@@ -197,6 +197,11 @@ export function calcularFrete(uf, subtotal) {
   if (['RJ', 'MG', 'ES', 'PR', 'SC', 'RS'].includes(uf)) return configLoja.frete.sulSudeste
   return configLoja.frete.demais
 }
+export function prazoEntrega(uf) {
+  if (uf === 'SP') return { min: 2, max: 4 }
+  if (['RJ', 'MG', 'ES', 'PR', 'SC', 'RS'].includes(uf)) return { min: 4, max: 7 }
+  return { min: 7, max: 12 }
+}
 
 export async function buscarCep(cep) {
   const limpo = cep.replace(/\D/g, '')

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { autenticar, cadastrar } from '../componentes/Contas.js'
 
 function Login({ usuario, onEntrar, onMensagem }) {
@@ -102,6 +102,12 @@ function Login({ usuario, onEntrar, onMensagem }) {
         <button type="submit" className="botao-principal" disabled={carregando}>
           {carregando ? 'Aguarde...' : modo === 'entrar' ? 'Entrar' : 'Criar conta'}
         </button>
+
+        {modo === 'entrar' && (
+          <Link to="/esqueci-senha" className="text-xs underline text-pedra text-center" id="link-esqueci-senha">
+            Esqueci minha senha
+          </Link>
+        )}
 
         <button
           type="button"

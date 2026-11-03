@@ -71,6 +71,10 @@ const tentativasLogin = limitador({
   chave: (req) => req.ip + '|' + String((req.body && req.body.email) || '').trim().toLowerCase(),
 })
 const tentativasCadastro = limitador({ max: 10, janelaMs: 60 * 60 * 1000, chave: (req) => req.ip })
+const tentativasRecuperar = limitador({ max: 5, janelaMs: 60 * 60 * 1000, chave: (req) => req.ip })
+const tentativasRedefinir = limitador({ max: 10, janelaMs: 15 * 60 * 1000, chave: (req) => req.ip })
+
+
 
 function lerCookie(req, nome) {
   const cabecalho = req.headers.cookie || ''
@@ -116,6 +120,8 @@ const usuarioSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, trim: true, lowercase: true, maxlength: 120 },
   senhaHash: { type: String, required: true, select: false },
   tipo: { type: String, enum: ['cliente', 'admin'], default: 'cliente' },
+  redefinirHash: { type: String, select: false },
+  redefinirExpira: { type: Date, select: false },
 }, { timestamps: true })
 const Usuario = mongoose.model('Usuario', usuarioSchema, 'usuarios')
 
@@ -258,6 +264,68 @@ app.post('/api/login', async (req, res) => {
     return res.json(publico(usuario))
   } catch (erro) {
     console.error('Erro no login:', erro)
+    return res.status(500).json({ erro: 'erro_servidor' })
+  }
+})
+
+const VALIDADE_REDEFINIR = 30 * 60 * 1000
+const hashDoToken = (token) => crypto.createHash('sha256').update(token).digest('hex')
+
+async function enviarLinkSenha(usuario, link) {
+  if (!EM_PRODUCAO) {
+    console.log('Link para redefinir a senha de ' + usuario.email + ' (vale 30 minutos):')
+    console.log(link)
+    return
+  }
+  console.warn('Recuperação de senha pedida, mas nenhum serviço de e-mail foi configurado em enviarLinkSenha().')
+}
+
+app.post('/api/senha/esqueci', async (req, res) => {
+  const { email } = req.body || {}
+  if (typeof email !== 'string' || !EMAIL_REGEX.test(email.trim())) return res.status(400).json({ erro: 'email_invalido' })
+  if (tentativasRecuperar.bloqueado(req)) return res.status(429).json({ erro: 'muitas_tentativas' })
+  tentativasRecuperar.falha(req)
+
+  try {
+    const usuario = await Usuario.findOne({ email: email.trim().toLowerCase() })
+    if (usuario) {
+      const token = crypto.randomBytes(32).toString('hex')
+      await Usuario.updateOne(
+        { _id: usuario._id },
+        { $set: { redefinirHash: hashDoToken(token), redefinirExpira: new Date(Date.now() + VALIDADE_REDEFINIR) } },
+      )
+      const base = (process.env.URL_SITE || ORIGENS[0]).replace(/\/$/, '')
+      await enviarLinkSenha(usuario, base + '/redefinir-senha?token=' + token)
+    }
+    return res.json({ ok: true })
+  } catch (erro) {
+    console.error('Erro ao pedir recuperação de senha:', erro)
+    return res.status(500).json({ erro: 'erro_servidor' })
+  }
+})
+
+app.post('/api/senha/redefinir', async (req, res) => {
+  const { token, senha } = req.body || {}
+  if (tentativasRedefinir.bloqueado(req)) return res.status(429).json({ erro: 'muitas_tentativas' })
+  tentativasRedefinir.falha(req)
+  if (typeof token !== 'string' || !/^[0-9a-f]{64}$/.test(token)) return res.status(400).json({ erro: 'token_invalido' })
+  if (typeof senha !== 'string' || senha.length < 8) return res.status(400).json({ erro: 'senha_curta' })
+  if (bcrypt.truncates(senha)) return res.status(400).json({ erro: 'senha_longa' })
+
+  try {
+    const hash = hashDoToken(token)
+    const usuario = await Usuario.findOne({ redefinirHash: hash, redefinirExpira: { $gt: new Date() } }).select('+redefinirHash')
+    if (!usuario) return res.status(400).json({ erro: 'token_invalido' })
+    const senhaHash = await bcrypt.hash(senha, 10)
+    const r = await Usuario.updateOne(
+      { _id: usuario._id, redefinirHash: hash },
+      { $set: { senhaHash }, $unset: { redefinirHash: '', redefinirExpira: '' } },
+    )
+    if (r.modifiedCount !== 1) return res.status(400).json({ erro: 'token_invalido' })
+    tentativasRedefinir.limpar(req)
+    return res.json({ ok: true })
+  } catch (erro) {
+    console.error('Erro ao redefinir senha:', erro)
     return res.status(500).json({ erro: 'erro_servidor' })
   }
 })
@@ -781,6 +849,8 @@ async function criarProdutosIniciais() {
   await Produto.insertMany(PRODUTOS_INICIAIS.map(({ id, ...resto }) => ({ codigo: id, ...resto })))
   console.log('Catálogo inicial criado:', PRODUTOS_INICIAIS.length, 'produtos')
 }
+
+app.use('/api', (req, res) => res.status(404).json({ erro: 'nao_encontrado' }))
 
 app.use((err, req, res, next) => {
   if (err && err.type === 'entity.too.large') return res.status(413).json({ erro: 'arquivo_grande' })

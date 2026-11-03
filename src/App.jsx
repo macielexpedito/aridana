@@ -14,6 +14,9 @@ import Admin from './paginas/Admin.jsx'
 import Login from './paginas/Login.jsx'
 import { carregarCatalogo } from './componentes/Produtos.jsx'
 import { lerSessao, salvarSessao, verificarSessao, encerrarSessao } from './componentes/Contas.js'
+import NaoEncontrada from './paginas/NaoEncontrada.jsx'
+import EsqueciSenha from './paginas/EsqueciSenha.jsx'
+import RedefinirSenha from './paginas/RedefinirSenha.jsx'
 
 const TITULOS = {
   '/': 'Início',
@@ -154,6 +157,8 @@ function App() {
           />
           <Route path="/pedido" element={<Pedido pedido={pedido} />} />
           <Route path="/login" element={<Login usuario={usuario} onEntrar={entrar} onMensagem={mostrarMensagem} />} />
+          <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+          <Route path="/redefinir-senha" element={<RedefinirSenha onMensagem={mostrarMensagem} />} />
           <Route
             path="/admin"
             element={
@@ -168,7 +173,7 @@ function App() {
               )
             }
           />
-          <Route path="*" element={<Home onComprar={adicionar} />} />
+          <Route path="*" element={<NaoEncontrada />} />
         </Routes>
       </main>
 

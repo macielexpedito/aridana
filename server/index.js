@@ -7,6 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { criarToken, verificarToken } from './token.js'
+import nodemailer from 'nodemailer'
 
 const PRODUTOS_INICIAIS = JSON.parse(readFileSync(new URL('./produtos-seed.json', import.meta.url), 'utf8'))
 
@@ -271,13 +272,36 @@ app.post('/api/login', async (req, res) => {
 const VALIDADE_REDEFINIR = 30 * 60 * 1000
 const hashDoToken = (token) => crypto.createHash('sha256').update(token).digest('hex')
 
+const transporteEmail = process.env.SMTP_HOST
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: process.env.SMTP_PORT === '465',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_SENHA },
+    })
+  : null
+
 async function enviarLinkSenha(usuario, link) {
-  if (!EM_PRODUCAO) {
-    console.log('Link para redefinir a senha de ' + usuario.email + ' (vale 30 minutos):')
-    console.log(link)
+  if (!transporteEmail) {
+    if (!EM_PRODUCAO) {
+      console.log('Link para redefinir a senha de ' + usuario.email + ' (vale 30 minutos):')
+      console.log(link)
+    } else {
+      console.warn('SMTP não configurado: e-mail de recuperação não enviado.')
+    }
     return
   }
-  console.warn('Recuperação de senha pedida, mas nenhum serviço de e-mail foi configurado em enviarLinkSenha().')
+  try {
+    await transporteEmail.sendMail({
+      from: process.env.EMAIL_REMETENTE || process.env.SMTP_USER,
+      to: usuario.email,
+      subject: 'ARIDANA - redefinir sua senha',
+      text: 'Para criar uma nova senha, abra o link abaixo (vale por 30 minutos):\n\n' + link + '\n\nSe você não pediu isso, ignore este e-mail.',
+      html: '<p>Para criar uma nova senha, clique no link abaixo (vale por 30 minutos):</p><p><a href="' + link + '">Redefinir minha senha</a></p><p>Se você não pediu isso, ignore este e-mail.</p>',
+    })
+  } catch (erro) {
+    console.error('Falha ao enviar e-mail de recuperação:', erro.message)
+  }
 }
 
 app.post('/api/senha/esqueci', async (req, res) => {

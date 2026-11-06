@@ -81,6 +81,9 @@ function Pedido({ pedido }) {
           ))}
           <div className="text-sm mt-4 flex flex-col gap-2">
             <div className="flex justify-between"><span>Subtotal</span><span>{formatBRL(pedido.subtotal)}</span></div>
+            {pedido.promocao > 0 && (
+            <div className="flex justify-between"><span>Promoção: 50% na peça de menor valor</span><span>− {formatBRL(pedido.promocao)}</span></div>
+            )}
             <div className="flex justify-between"><span>Frete</span><span>{pedido.frete === 0 ? 'Grátis' : formatBRL(pedido.frete)}</span></div>
             {pedido.desconto > 0 && (
               <div className="flex justify-between"><span>Desconto Pix</span><span>− {formatBRL(pedido.desconto)}</span></div>

@@ -1,12 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom'
 import CalculoFrete from '../componentes/CalculoFrete.jsx'
-import { formatBRL, calcularFrete } from '../componentes/Produtos.jsx'
+import { formatBRL, calcularFrete, calcularPromocao} from '../componentes/Produtos.jsx'
 
 function Carrinho({ itens, subtotal, endereco, onEndereco, onAlterar, onRemover }) {
   const navegar = useNavigate()
 
   const frete = endereco ? calcularFrete(endereco.uf, subtotal) : null
-  const total = subtotal + (frete || 0)
+  const promocao = calcularPromocao(itens)
+  const total = subtotal - promocao + (frete || 0)
 
   if (itens.length === 0) {
     return (
@@ -79,6 +80,12 @@ function Carrinho({ itens, subtotal, endereco, onEndereco, onAlterar, onRemover 
             <span>Subtotal</span>
             <span>{formatBRL(subtotal)}</span>
           </div>
+          {promocao > 0 && (
+            <div className="flex justify-between text-sm py-2 text-green-800" id="linha-promocao">
+              <span>Promoção: 50% na peça de menor valor</span>
+              <span className="whitespace-nowrap">− {formatBRL(promocao)}</span>
+            </div>
+          )}
 
           <div className="flex justify-between text-sm py-2">
             <span>Frete</span>

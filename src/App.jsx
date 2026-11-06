@@ -12,7 +12,7 @@ import Checkout from './paginas/Checkout.jsx'
 import Pedido from './paginas/Pedido.jsx'
 import Admin from './paginas/Admin.jsx'
 import Login from './paginas/Login.jsx'
-import { carregarCatalogo } from './componentes/Produtos.jsx'
+import { carregarCatalogo, acharProduto } from './componentes/Produtos.jsx'
 import { lerSessao, salvarSessao, verificarSessao, encerrarSessao } from './componentes/Contas.js'
 import NaoEncontrada from './paginas/NaoEncontrada.jsx'
 import EsqueciSenha from './paginas/EsqueciSenha.jsx'
@@ -30,10 +30,24 @@ const TITULOS = {
   '/admin': 'Administrador',
 }
 
+const CHAVE_CARRINHO = 'aridana_carrinho'
+
+function lerCarrinho() {
+  try {
+    const lista = JSON.parse(localStorage.getItem(CHAVE_CARRINHO) || '[]')
+    if (!Array.isArray(lista)) return []
+    return lista.filter(
+      (i) => i && i.produto && typeof i.produto.id === 'string' && typeof i.produto.preco === 'number' &&
+        Number.isInteger(i.qtd) && i.qtd > 0 && i.qtd <= 20
+    )
+  } catch (e) {
+    return []
+  }
+}
 function App() {
   const location = useLocation()
 
-  const [itens, setItens] = useState([])
+  const [itens, setItens] = useState(lerCarrinho)
   const [mensagem, setMensagem] = useState('')
   const [endereco, setEndereco] = useState(null)
   const [pedido, setPedido] = useState(null)
@@ -41,12 +55,30 @@ function App() {
   const [verificado, setVerificado] = useState(false)
   const [, setVersaoCatalogo] = useState(0)
 
-  function atualizarCatalogo() {
-    return carregarCatalogo().then(() => setVersaoCatalogo((v) => v + 1))
+    function atualizarCatalogo() {
+    return carregarCatalogo().then((ok) => {
+      if (ok) {
+        setItens((atual) =>
+          atual
+            .map((i) => {
+              const p = acharProduto(i.produto.id)
+              return p ? { ...i, produto: p } : null
+            })
+            .filter(Boolean)
+        )
+      }
+      setVersaoCatalogo((v) => v + 1)
+    })
   }
   useEffect(() => {
     atualizarCatalogo()
   }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAVE_CARRINHO, JSON.stringify(itens))
+    } catch (e) {}
+  }, [itens])
 
   useEffect(() => {
     verificarSessao().then((u) => {

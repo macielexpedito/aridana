@@ -197,6 +197,13 @@ export function calcularFrete(uf, subtotal) {
   if (['RJ', 'MG', 'ES', 'PR', 'SC', 'RS'].includes(uf)) return configLoja.frete.sulSudeste
   return configLoja.frete.demais
 }
+
+export function calcularPromocao(itens) {
+  const precos = []
+  for (const i of itens) for (let n = 0; n < i.qtd; n++) precos.push(i.produto.preco)
+  if (precos.length < 2) return 0
+  return Math.round(Math.min(...precos) * 50) / 100
+}
 export function prazoEntrega(uf) {
   if (uf === 'SP') return { min: 2, max: 4 }
   if (['RJ', 'MG', 'ES', 'PR', 'SC', 'RS'].includes(uf)) return { min: 4, max: 7 }

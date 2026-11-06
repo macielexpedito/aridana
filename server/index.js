@@ -175,6 +175,12 @@ const configPublica = (c) => ({
   maisVendidos: c.maisVendidos,
 })
 
+  function calcularPromocao(linhas) {
+  const precos = []
+  for (const l of linhas) for (let n = 0; n < l.qtd; n++) precos.push(l.preco)
+  if (precos.length < 2) return 0
+  return Math.round(Math.min(...precos) * 50) / 100
+}
 function calcularFrete(uf, subtotal, c) {
   if (subtotal >= c.freteGratis) return 0
   if (uf === 'SP') return c.frete.sp
@@ -204,6 +210,7 @@ const pedidoSchema = new mongoose.Schema({
     codigo: String, ref: String, nome: String, preco: Number, qtd: Number, tamanho: String, cor: String,
   }],
   subtotal: Number,
+  promocao: { type: Number, default: 0 },
   frete: Number,
   desconto: Number,
   total: Number,
@@ -213,7 +220,7 @@ const Pedido = mongoose.model('Pedido', pedidoSchema, 'pedidos')
 
 const pedidoAdmin = (p) => ({
   id: String(p._id), numero: p.numero, criadoEm: p.createdAt, status: p.status, pagamento: p.pagamento,
-  cliente: p.cliente, endereco: p.endereco, itens: p.itens, subtotal: p.subtotal, frete: p.frete,
+  cliente: p.cliente, endereco: p.endereco, itens: p.itens, subtotal: p.subtotal, promocao: p.promocao || 0, frete: p.frete,
   desconto: p.desconto, total: p.total,
 })
 
@@ -565,20 +572,21 @@ app.post('/api/pedidos', async (req, res) => {
     const config = await lerConfig()
     const subtotal = Math.round(detalhes.reduce((soma, d) => soma + d.preco * d.qtd, 0) * 100) / 100
     const frete = calcularFrete(uf, subtotal, config)
-    const desconto = pagamento === 'pix' ? Math.round(subtotal * 5) / 100 : 0
-    const total = Math.round((subtotal + frete - desconto) * 100) / 100
+    const promocao = calcularPromocao(detalhes)
+    const desconto = pagamento === 'pix' ? Math.round((subtotal - promocao) * 5) / 100 : 0
+    const total = Math.round((subtotal - promocao + frete - desconto) * 100) / 100
 
     const contador = await Config.findOneAndUpdate({ chave: 'loja' }, { $inc: { contadorPedidos: 1 } }, { new: true })
     const pedido = await Pedido.create({
       numero: 'AR-' + contador.contadorPedidos,
       cliente: { nome: texto(cl.nome, 120), email: cl.email.trim().toLowerCase(), cpf: texto(cl.cpf, 20), telefone: texto(cl.telefone, 30) },
       endereco: { cep, rua: texto(en.rua, 160), numero: texto(en.numero, 20), bairro: texto(en.bairro, 120), cidade: texto(en.cidade, 120), uf },
-      pagamento, itens: detalhes, subtotal, frete, desconto, total,
+      pagamento, itens: detalhes, subtotal, promocao, frete, desconto, total,
     })
     return res.status(201).json({
       numero: pedido.numero,
       data: pedido.createdAt.toLocaleDateString('pt-BR'),
-      subtotal, frete, desconto, total,
+      subtotal, promocao, frete, desconto, total,
     })
   } catch (erro) {
     await desfazer().catch(() => {})

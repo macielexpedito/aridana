@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { formatBRL, calcularFrete, buscarCep } from '../componentes/Produtos.jsx'
+import { formatBRL, calcularFrete, calcularPromocao, buscarCep } from '../componentes/Produtos.jsx'
 import { chamarApi } from '../componentes/Contas.js'
 
 const PAGAMENTOS = [
@@ -26,8 +26,9 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
   const [enviando, setEnviando] = useState(false)
 
   const frete = form.uf ? calcularFrete(form.uf, subtotal) : 0
-  const desconto = pagamento === 'pix' ? subtotal * 0.05 : 0
-  const total = subtotal + frete - desconto
+  const promocao = calcularPromocao(itens)
+  const desconto = pagamento === 'pix' ? (subtotal - promocao) * 0.05 : 0
+  const total = subtotal - promocao + frete - desconto
 
   function mudar(e) {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -77,6 +78,7 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
         frete: salvo.frete,
         desconto: salvo.desconto,
         total: salvo.total,
+        promocao: salvo.promocao,
       })
       navegar('/pedido')
     } catch (err) {
@@ -198,6 +200,9 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
 
           <div className="text-sm mt-4 flex flex-col gap-2">
             <div className="flex justify-between"><span>Subtotal</span><span>{formatBRL(subtotal)}</span></div>
+            {promocao > 0 && (
+            <div className="flex justify-between text-green-800"><span>Promoção: 50% na peça de menor valor</span><span>− {formatBRL(promocao)}</span></div>
+              )}
             <div className="flex justify-between"><span>Frete</span><span>{frete === 0 ? (form.uf ? 'Grátis' : 'a calcular') : formatBRL(frete)}</span></div>
             {desconto > 0 && (
               <div className="flex justify-between text-green-800"><span>Desconto Pix (5%)</span><span>− {formatBRL(desconto)}</span></div>

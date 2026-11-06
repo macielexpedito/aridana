@@ -42,6 +42,17 @@ function Home({ onComprar }) {
         </div>
       </section>
 
+      <section className="bg-marrom text-[#fffaf0] text-center px-6 py-8 sm:py-10" id="faixa-promocao">
+        <p className="text-[11px] uppercase tracking-[0.35em] text-dourado">Oferta especial</p>
+        <p className="font-titulo text-2xl sm:text-4xl leading-snug mt-3">
+          Leve duas peças ou mais e ganhe 50% de desconto na de menor valor
+        </p>
+        <span className="block w-12 h-px bg-dourado mx-auto mt-5" />
+        <p className="text-xs sm:text-sm font-light tracking-wide opacity-80 mt-4">
+          Desconto aplicado automaticamente na sacola, em uma peça por pedido.
+        </p>
+      </section>
+
       <section className="max-w-[1100px] mx-auto px-6 mt-14" id="secao-categorias">
         <h2 className="titulo-secao">Compre por categoria</h2>
 

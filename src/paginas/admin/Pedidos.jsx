@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect } from 'react'
 import { chamarApi } from '../../componentes/Contas.js'
 import { formatBRL } from '../../componentes/Produtos.jsx'
 
+
 const STATUS = [
   { chave: 'novo', rotulo: 'Novo' },
   { chave: 'pago', rotulo: 'Pago' },
@@ -102,7 +103,7 @@ function Pedidos({ onMensagem, tratarErro, onProdutosAlterados }) {
                           {p.itens.map((i, k) => (
                             <p key={k}>{i.qtd}× {i.nome} · Tam. {i.tamanho} · {formatBRL(i.preco * i.qtd)}</p>
                           ))}
-                          <p className="mt-2">Subtotal {formatBRL(p.subtotal)} · Frete {formatBRL(p.frete)}{p.desconto > 0 ? ' · Desconto −' + formatBRL(p.desconto) : ''}</p>
+                          <p className="mt-2">Subtotal {formatBRL(p.subtotal)}{p.promocao > 0 ? ' · Promoção −' + formatBRL(p.promocao) : ''} · Frete {formatBRL(p.frete)}{p.desconto > 0 ? ' · Desconto −' + formatBRL(p.desconto) : ''}</p>
                         </div>
                       </div>
                     </td>

@@ -1,8 +1,9 @@
 import { Link, Navigate } from 'react-router-dom'
 import { formatBRL } from '../componentes/Produtos.jsx'
+import AguardandoPagamento from '../componentes/AguardandoPagamento.jsx'
 
 const ETAPAS = [
-  { titulo: 'Pedido confirmado', texto: 'Recebemos o seu pedido e o pagamento foi registrado.' },
+  { titulo: 'Pedido confirmado', texto: 'Recebemos o seu pedido.' },
   { titulo: 'Separação em estoque', texto: 'Estamos separando e embalando as suas peças.' },
   { titulo: 'Enviado', texto: 'Você receberá o código de rastreio por e-mail.' },
   { titulo: 'Entregue', texto: 'Previsão de entrega em 3 a 7 dias úteis.' },
@@ -16,7 +17,7 @@ function Pedido({ pedido }) {
   return (
     <div className="max-w-[1216px] mx-auto px-6 pt-10" id="pagina-pedido">
       <ol className="flex justify-center items-center gap-3 text-[10px] uppercase tracking-widest text-pedra mb-10" id="etapas-compra">
-        <li>Carrinho</li><li>—</li><li>Dados e entrega</li><li>—</li><li className="text-carvao font-semibold">Pagamento concluído</li>
+        <li>Carrinho</li><li>—</li><li>Dados e entrega</li><li>—</li><li className="text-carvao font-semibold">Pedido recebido</li>
       </ol>
 
       <div className="text-center">
@@ -27,6 +28,10 @@ function Pedido({ pedido }) {
         </p>
         <p className="text-xs text-pedra mt-2">Pedido {pedido.numero} · {pedido.data}</p>
       </div>
+
+      {pedido.chave && pedido.status !== 'pago' && (
+          <AguardandoPagamento numero={pedido.numero} chave={pedido.chave} pix={pedido.pix} />
+        )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8 mt-10">
         <div className="flex flex-col gap-6">
@@ -55,7 +60,7 @@ function Pedido({ pedido }) {
             <div>
               <h3 className="uppercase tracking-widest font-semibold mb-2">Pagamento</h3>
               <p className="capitalize">{pedido.pagamento === 'cartao' ? 'Cartão de crédito' : pedido.pagamento}</p>
-              <p className="text-pedra">Mercado Pago (sandbox)</p>
+              <p className="text-pedra">Mercado Pago</p>
             </div>
           </section>
 

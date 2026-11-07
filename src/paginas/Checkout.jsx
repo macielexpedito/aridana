@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { formatBRL, calcularFrete, calcularPromocao, buscarCep } from '../componentes/Produtos.jsx'
 import { chamarApi } from '../componentes/Contas.js'
+import CartaoMP, { MP_CHAVE_PUBLICA } from '../componentes/CartaoMP.jsx'
 
 const PAGAMENTOS = [
   { chave: 'pix', rotulo: 'Pix', texto: 'Aprovação imediata, 5% de desconto' },
-  { chave: 'cartao', rotulo: 'Cartão de crédito', texto: 'Até 3x sem juros' },
+    { chave: 'cartao', rotulo: 'Cartão de crédito', texto: 'Parcele em até 18x' },
   { chave: 'boleto', rotulo: 'Boleto', texto: 'Vence em 3 dias úteis' },
 ]
 
@@ -24,6 +25,7 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
   const [pagamento, setPagamento] = useState('pix')
   const [erroCep, setErroCep] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const cartaoRef = useRef(null)
 
   const frete = form.uf ? calcularFrete(form.uf, subtotal) : 0
   const promocao = calcularPromocao(itens)
@@ -61,11 +63,21 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
     }
 
     setEnviando(true)
+      let cartao
+      if (pagamento === 'cartao' && MP_CHAVE_PUBLICA) {
+        try {
+          cartao = await cartaoRef.current.gerar()
+        } catch (err) {
+          onMensagem(err.message === 'nome_titular' ? 'Informe o nome do titular do cartão.' : 'Confira os dados do cartão.')
+          setEnviando(false)
+          return
+        }
+      }
     try {
       const salvo = await chamarApi('pedidos', {
         cliente: { nome: form.nome, email: form.email, cpf: form.cpf, telefone: form.telefone },
         endereco: { cep: form.cep, rua: form.rua, numero: form.numero, bairro: form.bairro, cidade: form.cidade, uf: form.uf },
-        pagamento,
+        pagamento,cartao,
         itens: itens.map((i) => ({ id: i.produto.id, qtd: i.qtd, tamanho: i.tamanho, cor: i.cor })),
       })
       onFinalizar({
@@ -79,6 +91,9 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
         desconto: salvo.desconto,
         total: salvo.total,
         promocao: salvo.promocao,
+        status: salvo.status,
+        pix: salvo.pix,
+        chave: salvo.chave,
       })
       navegar('/pedido')
     } catch (err) {
@@ -86,6 +101,9 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
       else if (err.message === 'produto_indisponivel') onMensagem('Uma das peças não está mais disponível.')
       else if (err.message === 'sem_servidor') onMensagem('Servidor indisponível. Não foi possível registrar o pedido.')
       else if (err.message === 'muitas_tentativas') onMensagem('Muitos pedidos seguidos. Tente novamente mais tarde.')
+      else if (err.message === 'pagamento_recusado') onMensagem('Pagamento recusado. Confira os dados do cartão ou escolha outra forma de pagamento.')
+      else if (err.message === 'pagamento_indisponivel') onMensagem('Não foi possível falar com o Mercado Pago agora. Tente novamente em instantes.')
+      else if (err.message === 'cartao_invalido') onMensagem('Confira os dados do cartão.')
       else onMensagem('Não foi possível concluir o pedido. Confira os dados.')
     }
     setEnviando(false)
@@ -179,6 +197,7 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
                 </label>
               ))}
             </div>
+            {pagamento === 'cartao' && MP_CHAVE_PUBLICA && <CartaoMP valor={total} cpf={form.cpf} apiRef={cartaoRef} />}
             <p className="text-[11px] text-pedra mt-4">
               Pagamento processado pelo Mercado Pago em ambiente de testes (sandbox).
             </p>

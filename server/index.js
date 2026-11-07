@@ -20,6 +20,8 @@ const EM_PRODUCAO = process.env.NODE_ENV === 'production'
 const VALIDADE_SESSAO = 2 * 60 * 60
 const NOME_COOKIE = 'aridana_token'
 const ORIGENS = (process.env.ORIGENS_PERMITIDAS || 'http://localhost:5173').split(',').map((o) => o.trim())
+const MP_TOKEN = process.env.MP_ACCESS_TOKEN || ''
+const MP_ATIVO = MP_TOKEN !== '' && !/^COLE-AQUI/.test(MP_TOKEN)
 
 if (!JWT_SECRET || JWT_SECRET.length < 32 || /^(troque-por|COLE-AQUI)/.test(JWT_SECRET)) {
   console.error('JWT_SECRET ausente, curto (mínimo 32 caracteres) ou ainda com o texto de exemplo. Gere um com: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"')
@@ -215,6 +217,8 @@ const pedidoSchema = new mongoose.Schema({
   desconto: Number,
   total: Number,
   status: { type: String, enum: STATUS_PEDIDO, default: 'novo' },
+  mpOrderId: { type: String, default: '' },
+  chave: { type: String, select: false },
 }, { timestamps: true })
 const Pedido = mongoose.model('Pedido', pedidoSchema, 'pedidos')
 
@@ -524,12 +528,95 @@ app.put('/api/admin/config', exigirLogin, exigirAdmin, async (req, res) => {
 })
 
 const tentativasPedido = limitador({ max: 20, janelaMs: 60 * 60 * 1000, chave: (req) => req.ip })
+const tentativasConsulta = limitador({ max: 300, janelaMs: 10 * 60 * 1000, chave: (req) => req.ip })
+
+async function mpChamar(metodo, caminho, corpo, chaveIdempotencia) {
+  const cabecalhos = { Authorization: 'Bearer ' + MP_TOKEN, Accept: 'application/json' }
+  if (corpo) cabecalhos['Content-Type'] = 'application/json'
+  if (chaveIdempotencia) cabecalhos['X-Idempotency-Key'] = chaveIdempotencia
+  const resp = await fetch('https://api.mercadopago.com' + caminho, {
+    method: metodo,
+    headers: cabecalhos,
+    body: corpo ? JSON.stringify(corpo) : undefined,
+    signal: AbortSignal.timeout(20000),
+  })
+  const dados = await resp.json().catch(() => null)
+  return { ok: resp.ok, status: resp.status, dados }
+}
+
+function estadoDaOrder(o) {
+  const s = o && o.status
+  if (s === 'processed') return 'pago'
+  if (['failed', 'canceled', 'cancelled', 'expired'].includes(s)) return 'recusado'
+  return 'pendente'
+}
+
+function marcarPago(id) {
+  return Pedido.findOneAndUpdate({ _id: id, status: 'novo' }, { $set: { status: 'pago' } }, { new: true })
+}
+
+async function cancelarPedidoNovo(id) {
+  const p = await Pedido.findOneAndUpdate({ _id: id, status: 'novo' }, { $set: { status: 'cancelado' } }, { new: true })
+  if (p) for (const i of p.itens) await Produto.updateOne({ codigo: i.codigo }, { $inc: { estoque: i.qtd } })
+  return p
+}
+
+async function cobrarNoMercadoPago(pedido, pagamento, cartao) {
+  const valor = pedido.total.toFixed(2)
+  const metodo = pagamento === 'pix'
+    ? { id: 'pix', type: 'bank_transfer' }
+    : { id: cartao.paymentMethodId, type: 'credit_card', token: cartao.token, installments: cartao.installments }
+  const pg = { amount: valor, payment_method: metodo }
+  if (pagamento === 'pix') pg.expiration_time = 'PT1H'
+
+  const r = await mpChamar('POST', '/v1/orders', {
+    type: 'online',
+    processing_mode: 'automatic',
+    total_amount: valor,
+    external_reference: pedido.numero,
+    payer: { email: pedido.cliente.email },
+    transactions: { payments: [pg] },
+  }, crypto.randomUUID())
+
+  if (!r.dados || r.status >= 500) throw new Error('Mercado Pago indisponível (HTTP ' + r.status + ')')
+  if (!r.ok) {
+    console.error('Mercado Pago recusou o pedido ' + pedido.numero + ': HTTP ' + r.status + ' ' + JSON.stringify(r.dados).slice(0, 600))
+    return { estado: 'recusado' }
+  }
+
+  const o = r.dados
+  await Pedido.updateOne({ _id: pedido._id }, { $set: { mpOrderId: String(o.id || '') } })
+  const p = o.transactions && o.transactions.payments && o.transactions.payments[0]
+  const m = p && p.payment_method
+  const pix = pagamento === 'pix' && m
+    ? { qrCode: m.qr_code || '', qrCodeBase64: m.qr_code_base64 || '', ticketUrl: m.ticket_url || '' }
+    : null
+  return { estado: estadoDaOrder(o), pix }
+}
+
+async function sincronizarPedido(pedido) {
+  if (!MP_ATIVO || !pedido.mpOrderId || pedido.status !== 'novo') return pedido
+  const r = await mpChamar('GET', '/v1/orders/' + encodeURIComponent(pedido.mpOrderId))
+  if (!r.ok || !r.dados) return pedido
+  const o = r.dados
+  if (o.external_reference !== pedido.numero) return pedido
+  const estado = estadoDaOrder(o)
+  if (estado === 'pago') {
+    if (Math.abs(Number(o.total_amount) - pedido.total) > 0.009) {
+      console.error('Valor pago diferente do pedido ' + pedido.numero + ': ' + o.total_amount + ' x ' + pedido.total)
+      return pedido
+    }
+    return (await marcarPago(pedido._id)) || pedido
+  }
+  if (estado === 'recusado') return (await cancelarPedidoNovo(pedido._id)) || pedido
+  return pedido
+}
 
 app.post('/api/pedidos', async (req, res) => {
   if (tentativasPedido.bloqueado(req)) return res.status(429).json({ erro: 'muitas_tentativas' })
   tentativasPedido.falha(req)
 
-  const { cliente, endereco, pagamento, itens } = req.body || {}
+  const { cliente, endereco, pagamento, itens, cartao } = req.body || {}
   const cl = cliente || {}
   const en = endereco || {}
   const texto = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -540,7 +627,16 @@ app.post('/api/pedidos', async (req, res) => {
   if (cep.length !== 8 || uf.length !== 2 || !textoValido(en.rua) || !textoValido(en.numero) || !textoValido(en.cidade)) return res.status(400).json({ erro: 'endereco_invalido' })
   if (!['pix', 'cartao', 'boleto'].includes(pagamento)) return res.status(400).json({ erro: 'pagamento_invalido' })
   if (!Array.isArray(itens) || itens.length === 0 || itens.length > 50) return res.status(400).json({ erro: 'itens_invalidos' })
+  
 
+  const cobrancaOnline = MP_ATIVO && (pagamento === 'pix' || pagamento === 'cartao')
+  if (cobrancaOnline && pagamento === 'cartao') {
+    const c = cartao || {}
+    const tokenOk = typeof c.token === 'string' && /^[A-Za-z0-9]{10,80}$/.test(c.token)
+    const metodoOk = typeof c.paymentMethodId === 'string' && /^[a-z0-9_]{2,30}$/.test(c.paymentMethodId)
+    const parcelasOk = Number.isInteger(c.installments) && c.installments >= 1 && c.installments <= 12
+    if (!tokenOk || !metodoOk || !parcelasOk) return res.status(400).json({ erro: 'cartao_invalido' })
+    }
   const linhas = []
   for (const i of itens) {
     if (!i || typeof i.id !== 'string' || !Number.isInteger(i.qtd) || i.qtd < 1 || i.qtd > 20) return res.status(400).json({ erro: 'itens_invalidos' })
@@ -582,11 +678,39 @@ app.post('/api/pedidos', async (req, res) => {
       cliente: { nome: texto(cl.nome, 120), email: cl.email.trim().toLowerCase(), cpf: texto(cl.cpf, 20), telefone: texto(cl.telefone, 30) },
       endereco: { cep, rua: texto(en.rua, 160), numero: texto(en.numero, 20), bairro: texto(en.bairro, 120), cidade: texto(en.cidade, 120), uf },
       pagamento, itens: detalhes, subtotal, promocao, frete, desconto, total,
+      chave: cobrancaOnline ? crypto.randomBytes(16).toString('hex') : undefined,
     })
+    baixados.length = 0
+
+    let status = 'novo'
+    let pix = null
+    if (cobrancaOnline) {
+      let cobranca
+      try {
+        cobranca = await cobrarNoMercadoPago(pedido, pagamento, cartao)
+      } catch (e) {
+        console.error('Erro ao falar com o Mercado Pago:', e.message)
+        await cancelarPedidoNovo(pedido._id)
+        return res.status(502).json({ erro: 'pagamento_indisponivel' })
+      }
+      if (cobranca.estado === 'recusado') {
+        await cancelarPedidoNovo(pedido._id)
+        return res.status(402).json({ erro: 'pagamento_recusado' })
+      }
+      if (cobranca.estado === 'pago') {
+        await marcarPago(pedido._id)
+        status = 'pago'
+      }
+      pix = cobranca.pix
+    }
+
     return res.status(201).json({
       numero: pedido.numero,
       data: pedido.createdAt.toLocaleDateString('pt-BR'),
       subtotal, promocao, frete, desconto, total,
+      status,
+      pix,
+      chave: cobrancaOnline ? pedido.chave : undefined,
     })
   } catch (erro) {
     await desfazer().catch(() => {})
@@ -595,6 +719,35 @@ app.post('/api/pedidos', async (req, res) => {
   }
 })
 
+app.get('/api/pagamento/:numero', async (req, res) => {
+  if (tentativasConsulta.bloqueado(req)) return res.status(429).json({ erro: 'muitas_tentativas' })
+  tentativasConsulta.falha(req)
+  const informada = Buffer.from(typeof req.query.chave === 'string' ? req.query.chave : '')
+  try {
+    const pedido = await Pedido.findOne({ numero: String(req.params.numero) }).select('+chave')
+    const real = Buffer.from((pedido && pedido.chave) || '')
+    if (!pedido || real.length === 0 || informada.length !== real.length || !crypto.timingSafeEqual(informada, real)) {
+      return res.status(404).json({ erro: 'nao_encontrado' })
+    }
+    const atual = await sincronizarPedido(pedido)
+    res.json({ status: atual.status })
+  } catch (erro) {
+    console.error('Erro ao consultar pagamento:', erro)
+    res.status(500).json({ erro: 'erro_servidor' })
+  }
+})
+
+app.post('/api/mercadopago/webhook', async (req, res) => {
+  res.sendStatus(200)
+  try {
+    const id = req.body && req.body.data && req.body.data.id
+    if (!MP_ATIVO || typeof id !== 'string' || !/^[A-Za-z0-9_-]{8,80}$/.test(id)) return
+    const pedido = await Pedido.findOne({ mpOrderId: id })
+    if (pedido) await sincronizarPedido(pedido)
+  } catch (erro) {
+    console.error('Erro no webhook do Mercado Pago:', erro.message)
+  }
+})
 app.get('/api/admin/pedidos', exigirLogin, exigirAdmin, async (req, res) => {
   try {
     const lista = await Pedido.find().sort({ createdAt: -1 }).limit(200)
@@ -907,6 +1060,21 @@ async function iniciar() {
     await Pedido.init()
     await lerConfig()
     app.listen(PORT, () => console.log(`API em http://localhost:${PORT}`))
+    setInterval(async () => {
+      if (!MP_ATIVO) return
+      try {
+        const pendentes = await Pedido.find({
+          status: 'novo',
+          mpOrderId: { $ne: '' },
+          createdAt: { $gt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) },
+        }).limit(50)
+        for (const p of pendentes) {
+          try { await sincronizarPedido(p) } catch (e) { /* tenta de novo no próximo ciclo */ }
+        }
+      } catch (e) {
+        console.error('Conferência de pagamentos falhou:', e.message)
+      }
+    }, 30000)
   } catch (erro) {
     console.error('Falha ao iniciar:', erro.message)
     console.error('Confira se o container mongo-local está ativo e a porta 27017 publicada.')

@@ -12,6 +12,7 @@ import nodemailer from 'nodemailer'
 const PRODUTOS_INICIAIS = JSON.parse(readFileSync(new URL('./produtos-seed.json', import.meta.url), 'utf8'))
 
 const app = express()
+app.set('trust proxy', 1)
 const PORT = process.env.PORT || 4000
 const MONGO_URI = process.env.MONGO_URI
 
@@ -625,7 +626,7 @@ app.post('/api/pedidos', async (req, res) => {
   const cep = texto(en.cep, 20).replace(/\D/g, '')
   const uf = texto(en.uf, 2).toUpperCase()
   if (cep.length !== 8 || uf.length !== 2 || !textoValido(en.rua) || !textoValido(en.numero) || !textoValido(en.cidade)) return res.status(400).json({ erro: 'endereco_invalido' })
-  if (!['pix', 'cartao', 'boleto'].includes(pagamento)) return res.status(400).json({ erro: 'pagamento_invalido' })
+   if (!['pix', 'cartao'].includes(pagamento)) return res.status(400).json({ erro: 'pagamento_invalido' })
   if (!Array.isArray(itens) || itens.length === 0 || itens.length > 50) return res.status(400).json({ erro: 'itens_invalidos' })
   
 
@@ -880,8 +881,8 @@ function lerVitrine(v) {
 }
 
 const IMG_VALIDA = /^\/img\/[A-Za-z0-9_\-./]+$/
-const imgSegura = (v) => v === '' || (typeof v === 'string' && v.length <= 200 && IMG_VALIDA.test(v) && !v.includes('..'))
-
+const IMG_CLOUDINARY = /^https:\/\/res\.cloudinary\.com\/[A-Za-z0-9_-]+\/image\/upload\/[A-Za-z0-9_\-./]+$/
+const imgSegura = (v) => v === '' || (typeof v === 'string' && v.length <= 200 && !v.includes('..') && (IMG_VALIDA.test(v) || IMG_CLOUDINARY.test(v)))
 function validarProduto(l) {
   const c = l || {}
   const nome = String(c.nome == null ? '' : c.nome).trim()
@@ -1009,7 +1010,31 @@ app.post('/api/admin/upload', exigirLogin, exigirAdmin, express.raw({ type: ['im
   if (!Buffer.isBuffer(buf) || buf.length === 0) return res.status(400).json({ erro: 'arquivo_invalido', mensagem: 'Envie uma imagem JPG, PNG ou WEBP' })
   const ext = tipoDaImagem(buf)
   if (!ext) return res.status(400).json({ erro: 'arquivo_invalido', mensagem: 'O arquivo não é uma imagem JPG, PNG ou WEBP' })
-  try {
+    try {
+    const cloud = process.env.CLOUDINARY_CLOUD_NAME
+    const chaveApi = process.env.CLOUDINARY_API_KEY
+    const segredo = process.env.CLOUDINARY_API_SECRET
+    if (cloud && chaveApi && segredo) {
+      const timestamp = String(Math.floor(Date.now() / 1000))
+      const assinatura = crypto.createHash('sha1').update('folder=aridana&timestamp=' + timestamp + segredo).digest('hex')
+      const form = new FormData()
+      form.append('file', new Blob([buf], { type: 'image/' + (ext === 'jpg' ? 'jpeg' : ext) }), 'foto.' + ext)
+      form.append('api_key', chaveApi)
+      form.append('timestamp', timestamp)
+      form.append('folder', 'aridana')
+      form.append('signature', assinatura)
+      const r = await fetch('https://api.cloudinary.com/v1_1/' + encodeURIComponent(cloud) + '/image/upload', {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(30000),
+      })
+      const dados = await r.json().catch(() => null)
+      if (!r.ok || !dados || typeof dados.secure_url !== 'string') {
+        console.error('Cloudinary recusou o upload:', r.status, JSON.stringify(dados).slice(0, 300))
+        return res.status(502).json({ erro: 'upload_indisponivel', mensagem: 'Não foi possível enviar a imagem. Tente de novo.' })
+      }
+      return res.status(201).json({ caminho: dados.secure_url })
+    }
     await mkdir(PASTA_UPLOADS, { recursive: true })
     const nome = crypto.randomBytes(10).toString('hex') + '.' + ext
     await writeFile(PASTA_UPLOADS + nome, buf)
@@ -1036,6 +1061,10 @@ async function criarProdutosIniciais() {
 }
 
 app.use('/api', (req, res) => res.status(404).json({ erro: 'nao_encontrado' }))
+
+const DIST = fileURLToPath(new URL('../dist/', import.meta.url))
+app.use(express.static(DIST))
+app.get(/^(?!\/api).*/, (req, res) => res.sendFile(DIST + 'index.html'))
 
 app.use((err, req, res, next) => {
   if (err && err.type === 'entity.too.large') return res.status(413).json({ erro: 'arquivo_grande' })

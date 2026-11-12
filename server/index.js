@@ -290,27 +290,44 @@ const transporteEmail = process.env.SMTP_HOST
       port: Number(process.env.SMTP_PORT || 587),
       secure: process.env.SMTP_PORT === '465',
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_SENHA },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     })
   : null
 
 async function enviarLinkSenha(usuario, link) {
+  const assunto = 'ARIDANA - redefinir sua senha'
+  const texto = 'Para criar uma nova senha, abra o link abaixo (vale por 30 minutos):\n\n' + link + '\n\nSe você não pediu isso, ignore este e-mail.'
+  const html = '<p>Para criar uma nova senha, clique no link abaixo (vale por 30 minutos):</p><p><a href="' + link + '">Redefinir minha senha</a></p><p>Se você não pediu isso, ignore este e-mail.</p>'
+  const remetente = process.env.EMAIL_REMETENTE || process.env.SMTP_USER
+
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: { 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ sender: { name: 'ARIDANA', email: remetente }, to: [{ email: usuario.email }], subject: assunto, textContent: texto, htmlContent: html }),
+        signal: AbortSignal.timeout(10000),
+      })
+      if (!r.ok) console.error('Brevo recusou o e-mail:', r.status, (await r.text()).slice(0, 300))
+    } catch (erro) {
+      console.error('Falha ao enviar e-mail (Brevo):', erro.message)
+    }
+    return
+  }
+
   if (!transporteEmail) {
     if (!EM_PRODUCAO) {
       console.log('Link para redefinir a senha de ' + usuario.email + ' (vale 30 minutos):')
       console.log(link)
     } else {
-      console.warn('SMTP não configurado: e-mail de recuperação não enviado.')
+      console.warn('E-mail não configurado: link de recuperação não enviado.')
     }
     return
   }
   try {
-    await transporteEmail.sendMail({
-      from: process.env.EMAIL_REMETENTE || process.env.SMTP_USER,
-      to: usuario.email,
-      subject: 'ARIDANA - redefinir sua senha',
-      text: 'Para criar uma nova senha, abra o link abaixo (vale por 30 minutos):\n\n' + link + '\n\nSe você não pediu isso, ignore este e-mail.',
-      html: '<p>Para criar uma nova senha, clique no link abaixo (vale por 30 minutos):</p><p><a href="' + link + '">Redefinir minha senha</a></p><p>Se você não pediu isso, ignore este e-mail.</p>',
-    })
+    await transporteEmail.sendMail({ from: remetente, to: usuario.email, subject: assunto, text: texto, html })
   } catch (erro) {
     console.error('Falha ao enviar e-mail de recuperação:', erro.message)
   }

@@ -6,8 +6,7 @@ import CartaoMP, { MP_CHAVE_PUBLICA } from '../componentes/CartaoMP.jsx'
 
 const PAGAMENTOS = [
   { chave: 'pix', rotulo: 'Pix', texto: 'Aprovação imediata, 5% de desconto' },
-    { chave: 'cartao', rotulo: 'Cartão de crédito', texto: 'Parcele em até 18x' },
-  { chave: 'boleto', rotulo: 'Boleto', texto: 'Vence em 3 dias úteis' },
+  { chave: 'cartao', rotulo: 'Cartão de crédito', texto: 'Até 6x sem juros (parcela mínima de R$ 50)' },
 ]
 
 function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensagem }) {
@@ -104,6 +103,7 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
       else if (err.message === 'pagamento_recusado') onMensagem('Pagamento recusado. Confira os dados do cartão ou escolha outra forma de pagamento.')
       else if (err.message === 'pagamento_indisponivel') onMensagem('Não foi possível falar com o Mercado Pago agora. Tente novamente em instantes.')
       else if (err.message === 'cartao_invalido') onMensagem('Confira os dados do cartão.')
+      else if (err.message === 'parcela_minima') onMensagem('O valor mínimo de cada parcela é R$ 50,00. Escolha menos parcelas.')
       else onMensagem('Não foi possível concluir o pedido. Confira os dados.')
     }
     setEnviando(false)
@@ -199,7 +199,7 @@ function Checkout({ itens, subtotal, endereco, onEndereco, onFinalizar, onMensag
             </div>
             {pagamento === 'cartao' && MP_CHAVE_PUBLICA && <CartaoMP valor={total} cpf={form.cpf} apiRef={cartaoRef} />}
             <p className="text-[11px] text-pedra mt-4">
-              Pagamento processado pelo Mercado Pago em ambiente de testes (sandbox).
+              Pagamento processado pelo Mercado Pago.
             </p>
           </section>
         </div>

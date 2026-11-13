@@ -652,7 +652,7 @@ app.post('/api/pedidos', async (req, res) => {
     const c = cartao || {}
     const tokenOk = typeof c.token === 'string' && /^[A-Za-z0-9]{10,80}$/.test(c.token)
     const metodoOk = typeof c.paymentMethodId === 'string' && /^[a-z0-9_]{2,30}$/.test(c.paymentMethodId)
-    const parcelasOk = Number.isInteger(c.installments) && c.installments >= 1 && c.installments <= 12
+    const parcelasOk = Number.isInteger(c.installments) && c.installments >= 1 && c.installments <= 6
     if (!tokenOk || !metodoOk || !parcelasOk) return res.status(400).json({ erro: 'cartao_invalido' })
     }
   const linhas = []
@@ -689,6 +689,10 @@ app.post('/api/pedidos', async (req, res) => {
     const promocao = calcularPromocao(detalhes)
     const desconto = pagamento === 'pix' ? Math.round((subtotal - promocao) * 5) / 100 : 0
     const total = Math.round((subtotal - promocao + frete - desconto) * 100) / 100
+    if (cobrancaOnline && pagamento === 'cartao' && cartao.installments > 1 && total / cartao.installments < 50) {
+    await desfazer()
+    return res.status(400).json({ erro: 'parcela_minima' })
+    }
 
     const contador = await Config.findOneAndUpdate({ chave: 'loja' }, { $inc: { contadorPedidos: 1 } }, { new: true })
     const pedido = await Pedido.create({

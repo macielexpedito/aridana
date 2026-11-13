@@ -4,6 +4,8 @@ const CHAVE_BRUTA = import.meta.env.VITE_MP_PUBLIC_KEY || ''
 export const MP_CHAVE_PUBLICA = /^COLE-AQUI/.test(CHAVE_BRUTA) ? '' : CHAVE_BRUTA
 
 function CartaoMP({ valor, cpf, apiRef }) {
+  const MAX_PARCELAS = 6
+  const PARCELA_MINIMA = 50
   const [erro, setErro] = useState('')
   const [parcelas, setParcelas] = useState([])
   const [parcela, setParcela] = useState('1')
@@ -17,7 +19,11 @@ function CartaoMP({ valor, cpf, apiRef }) {
     try {
       const v = vivo.current
       const lista = await v.mp.getInstallments({ amount: Number(v.valor).toFixed(2), bin, paymentTypeId: 'credit_card' })
-      const opcoes = lista && lista[0] ? lista[0].payer_costs : []
+      const todas = lista && lista[0] ? lista[0].payer_costs : []
+      const opcoes = todas.filter((p) =>
+      p.installments === 1 ||
+      (p.installments <= MAX_PARCELAS && p.installment_rate === 0 && p.installment_amount >= PARCELA_MINIMA)
+      )
       setParcelas(opcoes)
       setParcela(opcoes.length ? String(opcoes[0].installments) : '1')
     } catch (e) {

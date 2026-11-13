@@ -611,12 +611,15 @@ async function cobrarNoMercadoPago(pedido, pagamento, cartao) {
   const pg = { amount: valor, payment_method: metodo }
   if (pagamento === 'pix') pg.expiration_time = 'PT1H'
 
+  const payer = { email: pedido.cliente.email }
+  if (process.env.MP_MODO_TESTE === 'sim') payer.first_name = 'APRO'
+
   const r = await mpChamar('POST', '/v1/orders', {
     type: 'online',
     processing_mode: 'automatic',
     total_amount: valor,
     external_reference: pedido.numero,
-    payer: { email: pedido.cliente.email },
+    payer,
     transactions: { payments: [pg] },
   }, crypto.randomUUID())
 

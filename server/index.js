@@ -797,6 +797,31 @@ app.post('/api/mercadopago/webhook', async (req, res) => {
     console.error('Erro no webhook do Mercado Pago:', erro.message)
   }
 })
+
+app.get('/api/meus-pedidos', exigirLogin, async (req, res) => {
+  try {
+    const lista = await Pedido.find({ 'cliente.email': req.usuario.email }).sort({ createdAt: -1 }).limit(30)
+    const atualizados = []
+    for (const p of lista) {
+      let atual = p
+      if (p.status === 'novo' && p.mpOrderId) {
+        try { atual = await sincronizarPedido(p) } catch (e) { /* mostra o status que já tem */ }
+      }
+      atualizados.push({
+        numero: atual.numero,
+        criadoEm: atual.createdAt,
+        status: atual.status,
+        pagamento: atual.pagamento,
+        itens: atual.itens,
+        total: atual.total,
+      })
+    }
+    res.json(atualizados)
+  } catch (erro) {
+    console.error('Erro ao listar meus pedidos:', erro)
+    res.status(500).json({ erro: 'erro_servidor' })
+  }
+})
 app.get('/api/admin/pedidos', exigirLogin, exigirAdmin, async (req, res) => {
   try {
     const lista = await Pedido.find().sort({ createdAt: -1 }).limit(200)

@@ -17,6 +17,7 @@ import { lerSessao, salvarSessao, verificarSessao, encerrarSessao } from './comp
 import NaoEncontrada from './paginas/NaoEncontrada.jsx'
 import EsqueciSenha from './paginas/EsqueciSenha.jsx'
 import RedefinirSenha from './paginas/RedefinirSenha.jsx'
+import MeusPedidos from './paginas/MeusPedidos.jsx'
 
 const TITULOS = {
   '/': 'Início',
@@ -188,6 +189,7 @@ function App() {
             }
           />
           <Route path="/pedido" element={<Pedido pedido={pedido} />} />
+          <Route path="/meus-pedidos" element={usuario ? <MeusPedidos /> : <Navigate to="/login" state={{ de: '/meus-pedidos' }} replace />} />
           <Route path="/login" element={<Login usuario={usuario} onEntrar={entrar} onMensagem={mostrarMensagem} />} />
           <Route path="/esqueci-senha" element={<EsqueciSenha />} />
           <Route path="/redefinir-senha" element={<RedefinirSenha onMensagem={mostrarMensagem} />} />

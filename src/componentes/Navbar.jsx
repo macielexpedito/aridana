@@ -72,6 +72,7 @@ function Navbar({ carrinho, subtotal, usuario, onSair }) {
                       <Link to="/admin" className="underline">Painel</Link> ·{' '}
                     </>
                   )}
+                  <Link to="/meus-pedidos" className="underline">Pedidos</Link> ·{' '}
                   <button type="button" onClick={onSair} className="uppercase underline" id="botao-sair">Sair</button>
                 </span>
               </span>

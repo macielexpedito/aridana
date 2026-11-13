@@ -49,6 +49,30 @@ app.use((req, res, next) => {
 const json10kb = express.json({ limit: '10kb' })
 app.use((req, res, next) => (req.path === '/api/admin/produtos/importar' ? next() : json10kb(req, res, next)))
 
+let bancoPronto = null
+function prepararBanco() {
+  if (!bancoPronto) {
+    bancoPronto = (async () => {
+      await mongoose.connect(MONGO_URI)
+      await Usuario.init()
+      await criarAdmin()
+      await Produto.init()
+      await criarProdutosIniciais()
+      await Config.init()
+      await Pedido.init()
+      await lerConfig()
+    })().catch((e) => { bancoPronto = null; throw e })
+  }
+  return bancoPronto
+}
+if (process.env.VERCEL) {
+  app.use('/api', async (req, res, next) => {
+    try { await prepararBanco(); next() } catch (e) {
+      console.error('Banco indisponível:', e.message)
+      res.status(500).json({ erro: 'erro_servidor' })
+    }
+  })
+}
 function limitador({ max, janelaMs, chave }) {
   const registros = new Map()
   return {
@@ -1132,4 +1156,6 @@ async function iniciar() {
   }
 }
 
-iniciar()
+if (!process.env.VERCEL) iniciar()
+
+export default app
